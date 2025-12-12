@@ -1,0 +1,144 @@
+import pygame
+import sys
+import random
+import math
+
+# ----------------- Inställningar -----------------
+SCREEN_WIDTH = 800
+SCREEN_HEIGHT = 600
+FPS = 60
+NUM_BOTS = 9
+
+# Färger
+WHITE = (255, 255, 255)
+BLACK = (0, 0, 0)
+RED = (255, 0, 0)
+BLUE = (0, 0, 255)
+GREEN = (0, 200, 0)
+YELLOW = (255, 255, 0)
+
+# ----------------- Initiera Pygame -----------------
+pygame.init()
+screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
+pygame.display.set_caption("F1 Racing Game")
+clock = pygame.time.Clock()
+font = pygame.font.SysFont(None, 30)
+
+# ----------------- Bilklass -----------------
+class Car:
+    def __init__(self, x, y, color, is_player=False):
+        self.x = x
+        self.y = y
+        self.color = color
+        self.width = 20
+        self.height = 40
+        self.speed = 0
+        self.angle = 0
+        self.acceleration = 0.2
+        self.max_speed = 5 if is_player else random.uniform(3, 4.5)
+        self.friction = 0.05
+        self.is_player = is_player
+        self.finished = False
+        self.position = 0
+
+    def update(self):
+        if self.is_player:
+            keys = pygame.key.get_pressed()
+            if keys[pygame.K_UP] or keys[pygame.K_w]:
+                self.speed += self.acceleration
+            elif keys[pygame.K_DOWN] or keys[pygame.K_s]:
+                self.speed -= self.acceleration
+            else:
+                # Friktion
+                if self.speed > 0:
+                    self.speed -= self.friction
+                elif self.speed < 0:
+                    self.speed += self.friction
+                if abs(self.speed) < self.friction:
+                    self.speed = 0
+
+            if keys[pygame.K_LEFT] or keys[pygame.K_a]:
+                self.angle += 3
+            if keys[pygame.K_RIGHT] or keys[pygame.K_d]:
+                self.angle -= 3
+
+            # Begränsa hastighet
+            if self.speed > self.max_speed:
+                self.speed = self.max_speed
+            if self.speed < -self.max_speed/2:
+                self.speed = -self.max_speed/2
+        else:
+            # Enkel AI-rörelse mot mittlinje
+            self.speed = self.max_speed
+            self.angle += random.uniform(-2, 2)
+
+        # Räkna ut rörelse
+        rad = math.radians(self.angle)
+        self.x += -self.speed * math.sin(rad)
+        self.y += -self.speed * math.cos(rad)
+
+    def draw(self, surface):
+        car_surf = pygame.Surface((self.width, self.height))
+        car_surf.fill(self.color)
+        rotated_car = pygame.transform.rotate(car_surf, self.angle)
+        rect = rotated_car.get_rect(center=(self.x, self.y))
+        surface.blit(rotated_car, rect.topleft)
+
+# ----------------- Skapa bilar -----------------
+player_car = Car(SCREEN_WIDTH//2, SCREEN_HEIGHT-100, RED, is_player=True)
+bots = []
+for i in range(NUM_BOTS):
+    x = random.randint(100, SCREEN_WIDTH-100)
+    y = random.randint(50, SCREEN_HEIGHT-300)
+    bots.append(Car(x, y, BLUE))
+
+all_cars = [player_car] + bots
+
+# ----------------- Mål -----------------
+finish_line = pygame.Rect(SCREEN_WIDTH//2 - 100, 50, 200, 10)
+race_finished = False
+
+# ----------------- Poäng -----------------
+points = 0
+money = 0
+
+# ----------------- Huvudloop -----------------
+running = True
+while running:
+    clock.tick(FPS)
+    screen.fill(GREEN)  # Bakgrund
+
+    for event in pygame.event.get():
+        if event.type == pygame.QUIT:
+            running = False
+
+    if not race_finished:
+        # Uppdatera bilar
+        for car in all_cars:
+            car.update()
+            # Kolla mål
+            if finish_line.collidepoint(car.x, car.y) and not car.finished:
+                car.finished = True
+                car.position = sum(1 for c in all_cars if c.finished)
+                if car.is_player:
+                    points += 25 - (car.position-1)*5
+                    money += 100 - (car.position-1)*10
+
+        if player_car.finished:
+            race_finished = True
+
+    # Rita finishlinje
+    pygame.draw.rect(screen, YELLOW, finish_line)
+
+    # Rita bilar
+    for car in all_cars:
+        car.draw(screen)
+
+    # Visa poäng och pengar
+    score_text = font.render(f"Poäng: {points}  Pengar: ${money}", True, WHITE)
+    screen.blit(score_text, (10, 10))
+
+    pygame.display.flip()
+
+pygame.quit()
+sys.exit()
